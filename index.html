@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Procesador CSV y Generador Excel</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 50px;
+    }
+    h1 {
+      color: #4CAF50;
+    }
+    form {
+      margin: 20px auto;
+    }
+    input, button {
+      padding: 10px;
+      margin: 10px;
+      font-size: 16px;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <h1>Procesador de CSV y Generador de Excel</h1>
+  <form id="csvForm">
+    <label for="csvFile">Carga tu archivo CSV:</label>
+    <input type="file" id="csvFile" accept=".csv" required>
+    <br><br>
+    <label for="testNumber">Número de prueba:</label>
+    <input type="number" id="testNumber" required>
+    <br><br>
+    <label for="rowLimit">¿Cuántos contactos quiere usar?:</label>
+    <input type="number" id="rowLimit" required>
+    <br><br>
+    <button type="button" id="processButton">Procesar y Descargar Excel</button>
+  </form>
+
+  <script>
+    document.getElementById("processButton").addEventListener("click", () => {
+      const fileInput = document.getElementById("csvFile");
+      const testNumber = document.getElementById("testNumber").value;
+      const rowLimit = parseInt(document.getElementById("rowLimit").value, 10);
+
+      if (!fileInput.files.length || !testNumber || isNaN(rowLimit) || rowLimit <= 0) {
+        alert("Por favor, sube un archivo CSV, completa el número de prueba y el número de contactos.");
+        return;
+      }
+
+      const file = fileInput.files[0];
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function (results) {
+          const data = results.data.slice(0, rowLimit); // Usar solo las primeras `rowLimit` filas
+          const headers = Object.keys(data[0]); // Obtener encabezados
+          console.log("Encabezados detectados:", headers);
+
+          // Columnas requeridas y sus nuevos nombres
+          const columnMappings = {
+            'Correo electrónico': "CORREO",
+            'Número de teléfono': "CELULAR",
+            "Nombre": "NOMBRE",
+            "*AD.2 COACH ASIGNADA": "EJECUTIVA"
+          };
+
+          // Validar que todas las columnas requeridas estén presentes
+          const columnIndices = {};
+          for (const [original, renamed] of Object.entries(columnMappings)) {
+            const index = headers.findIndex(header => header.trim() === original);
+            if (index === -1) {
+              alert(`No se encontró la columna requerida: ${original}`);
+              return;
+            }
+            columnIndices[renamed] = headers[index];
+          }
+
+          console.log("Columnas mapeadas:", columnIndices);
+
+          // Filtrar y renombrar las columnas
+          const filteredData = data.map(row => ({
+            CORREO: row[columnIndices["CORREO"]] || '',
+            CELULAR: row[columnIndices["CELULAR"]] || '',
+            NOMBRE: row[columnIndices["NOMBRE"]] || '',
+            EJECUTIVA: row[columnIndices["EJECUTIVA"]] || ''
+          }));
+
+          // Limpieza de datos
+          const cleanPhoneNumber = phone => phone.replace(/\D/g, '') || '';
+          const cleanName = name =>
+            name.replace(/[^\w\s]/g, '').replace(/[^\x00-\x7F]+/g, '').trim() || 'Para ti';
+
+          const cleanedData = filteredData.map(row => {
+            let cleanedName = cleanName(row.NOMBRE);
+
+            // Si el nombre contiene "sin nombre" (insensible a mayúsculas), reemplazar con "Para ti"
+            if (/sin\s*nombre/i.test(cleanedName)) {
+              cleanedName = "Para ti";
+            }
+
+            return {
+              CORREO: row.CORREO,
+              CELULAR: cleanPhoneNumber(row.CELULAR),
+              NOMBRE: cleanedName,
+              EJECUTIVA: row.EJECUTIVA || 'no aplica',
+            };
+          });
+
+          // Generar filas de prueba
+          const rowsToInsert = [];
+          const testPhone = '56991709265';
+          for (let i = 200; i < cleanedData.length; i += 200) {
+            rowsToInsert.push({
+              CORREO: `prueba${Math.floor(i / 200)}`,
+              NOMBRE: `prueba${Math.floor(i / 200)}`,
+              CELULAR: testPhone,
+              EJECUTIVA: `prueba${Math.floor(i / 200)}`,
+            });
+          }
+
+          rowsToInsert.unshift({
+            CORREO: 'prueba inicial',
+            NOMBRE: 'prueba inicial',
+            CELULAR: testPhone,
+            EJECUTIVA: 'prueba inicial',
+          });
+          rowsToInsert.push({
+            CORREO: 'prueba final',
+            NOMBRE: 'prueba final',
+            CELULAR: testPhone,
+            EJECUTIVA: 'prueba final',
+          });
+
+          // Combinar datos originales con filas de prueba
+          let finalData = [];
+          finalData = finalData.concat(rowsToInsert[0]); // Fila inicial
+          for (let i = 0; i < cleanedData.length; i++) {
+            finalData.push(cleanedData[i]);
+            if ((i + 1) % 200 === 0 && rowsToInsert[(i + 1) / 200]) {
+              finalData.push(rowsToInsert[(i + 1) / 200]);
+            }
+          }
+          finalData = finalData.concat(rowsToInsert[rowsToInsert.length - 1]); // Fila final
+
+          // Generar archivo Excel con SheetJS
+          const ws = XLSX.utils.json_to_sheet(finalData);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "Datos");
+
+          // Descargar el archivo
+          const today = new Date();
+          const dateStr = today.toISOString().split("T")[0];
+          const filename = `ASIGNADOS_${dateStr}.xlsx`;
+          XLSX.writeFile(wb, filename);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
