@@ -93,14 +93,14 @@
           // Limpieza de datos
           const cleanPhoneNumber = phone => phone.replace(/\D/g, '') || '';
           const cleanName = name =>
-            name.replace(/[^\w\s]/g, '').replace(/[^\x00-\x7F]+/g, '').trim() || 'Para ti';
+            name.replace(/[^\w\s]/g, '').replace(/[^\x00-\x7F]+/g, '').trim() || 'Buen día';
 
           const cleanedData = filteredData.map(row => {
             let cleanedName = cleanName(row.NOMBRE);
 
             // Si el nombre contiene "sin nombre" (insensible a mayúsculas), reemplazar con "Para ti"
             if (/sin\s*nombre/i.test(cleanedName)) {
-              cleanedName = "Para ti";
+              cleanedName = "Buen día";
             }
 
             return {
